@@ -30,6 +30,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.player.ChatVisiblity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SignTextSlot;
 import net.minecraft.world.phys.Vec3;
 
 import java.nio.charset.StandardCharsets;
@@ -81,6 +82,6 @@ class PaperweightFakePlayer extends ServerPlayer {
     }
 
     @Override
-    public void openTextEdit(SignBlockEntity sign, boolean front) {
+    public void openTextEdit(SignBlockEntity sign, SignTextSlot slot) {
     }
 }

@@ -383,8 +383,8 @@ public final class PaperweightPlatformAdapter extends NMSAdapter {
                             levelChunk,
                             nmsWorld.getLightEngine(),
                             null,
-                            null,
-                            false // last false is to not bother with x-ray
+                            null
+                            // the x-ray boolean parameter was removed from Paper in 26.3
                     );
                 } else {
                     // deprecated on paper - deprecation suppressed

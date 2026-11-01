@@ -74,7 +74,7 @@ public class PaperweightBlockMaterial extends BukkitBlockMaterial<Block, BlockSt
 
     @Override
     public boolean isSolid() {
-        return this.blockState.isSolidRender();
+        return this.blockState.isSolid();
     }
 
     @Override
@@ -104,12 +104,12 @@ public class PaperweightBlockMaterial extends BukkitBlockMaterial<Block, BlockSt
 
     @Override
     public boolean isFragileWhenPushed() {
-        return this.blockState.getPistonPushReaction() == PushReaction.DESTROY;
+        return this.blockState.getPistonPushReaction() == PushReaction.POPPED;
     }
 
     @Override
     public boolean isUnpushable() {
-        return this.blockState.getPistonPushReaction() == PushReaction.BLOCK;
+        return this.blockState.getPistonPushReaction() == PushReaction.IMMOVEABLE;
     }
 
     @Override
@@ -120,7 +120,7 @@ public class PaperweightBlockMaterial extends BukkitBlockMaterial<Block, BlockSt
     @SuppressWarnings("deprecation")
     @Override
     public boolean isMovementBlocker() {
-        return this.blockState.blocksMotion();
+        return this.blockState.isSolid();
     }
 
     @Override

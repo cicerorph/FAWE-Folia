@@ -92,7 +92,8 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
+import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
+import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -115,6 +116,9 @@ import org.bukkit.craftbukkit.util.TransformerLevelAccessor;
 import org.bukkit.entity.Player;
 import org.enginehub.linbus.tree.LinCompoundTag;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -147,11 +151,28 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
             "components", DataComponentPatch.EMPTY
     ).codec();
 
+    // Paper renamed CraftItemStack#asCraftMirror to #asBukkitMirror; Spigot still uses the old name and it no
+    // longer exists on the (Paper-only) compile classpath, so it has to be resolved reflectively.
+    private static final MethodHandle CRAFT_ITEM_STACK_AS_CRAFT_MIRROR_SPIGOT;
+
     static {
         try {
             CHUNK_HOLDER_WAS_ACCESSIBLE_SINCE_LAST_SAVE = ChunkHolder.class.getDeclaredMethod("wasAccessibleSinceLastSave");
         } catch (NoSuchMethodException ignored) { // may not be present in newer paper versions
         }
+        MethodHandle asCraftMirror = null;
+        if (!PaperLib.isPaper()) {
+            try {
+                asCraftMirror = MethodHandles.lookup().findStatic(
+                        CraftItemStack.class,
+                        "asCraftMirror",
+                        MethodType.methodType(org.bukkit.inventory.ItemStack.class, ItemStack.class)
+                );
+            } catch (ReflectiveOperationException e) {
+                LOGGER.error("Failed to resolve CraftItemStack#asCraftMirror for Spigot support", e);
+            }
+        }
+        CRAFT_ITEM_STACK_AS_CRAFT_MIRROR_SPIGOT = asCraftMirror;
     }
 
     private final PaperweightMapChunkUtil mapUtil = new PaperweightMapChunkUtil();
@@ -541,7 +562,15 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
                     .getOrThrow();
             stack.applyComponents(patch);
         }
-        return CraftItemStack.asCraftMirror(stack);
+        if (PaperLib.isPaper()) {
+            return CraftItemStack.asBukkitMirror(stack);
+        } else {
+            try {
+                return (org.bukkit.inventory.ItemStack) CRAFT_ITEM_STACK_AS_CRAFT_MIRROR_SPIGOT.invoke(stack);
+            } catch (Throwable t) {
+                throw new RuntimeException("Failed to invoke CraftItemStack#asCraftMirror", t);
+            }
+        }
     }
 
     @Override
@@ -566,9 +595,9 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
         ServerLevel serverLevel = getServerLevel(world);
         ChunkGenerator generator = serverLevel.getMinecraftWorld().getChunkSource().getGenerator();
 
-        ConfiguredFeature<?, ?> configuredFeature = serverLevel
+        Feature configuredFeature = serverLevel
                 .registryAccess()
-                .lookupOrThrow(Registries.CONFIGURED_FEATURE)
+                .lookupOrThrow(Registries.FEATURE)
                 .getValue(Identifier.tryParse(feature.id()));
 
         FaweBlockStateListPopulator populator = new FaweBlockStateListPopulator(serverLevel);
@@ -614,14 +643,16 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
         List<CraftBlockState> placed = RegionSync.supply(world, pt.x(), pt.y(), pt.z(), () -> {
             preCaptureStates(serverLevel);
             try {
+                var randomState = chunkManager.randomState();
                 StructureStart structureStart = structure.generate(
                         structureRegistry.wrapAsHolder(structure),
                         serverLevel.dimension(),
                         serverLevel.registryAccess(),
                         chunkManager.getGenerator(),
                         chunkManager.getGenerator().getBiomeSource(),
-                        chunkManager.randomState(),
-                        serverLevel.getStructureManager(),
+                        randomState.createClimateSampler(SamplerContext.EMPTY_UNCACHED),
+                        randomState,
+                        serverLevel.getStructureTemplateManager(),
                         serverLevel.getSeed(),
                         chunkPos,
                         0,
@@ -770,7 +801,7 @@ public final class PaperweightFaweAdapter extends FaweAdapter<net.minecraft.nbt.
         face_features.add(NetherFeatures.GLOWSTONE_EXTRA.identifier().toString());
 
         // Features
-        for (Identifier name : server.registryAccess().lookupOrThrow(Registries.CONFIGURED_FEATURE).keySet()) {
+        for (Identifier name : server.registryAccess().lookupOrThrow(Registries.FEATURE).keySet()) {
             String id = name.toString();
             if (ConfiguredFeatureType.REGISTRY.get(id) == null) {
                 ConfiguredFeatureType.REGISTRY.register(id, new ConfiguredFeatureType(id, face_features.contains(id)));

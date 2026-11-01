@@ -125,9 +125,11 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.dimension.LevelStem;
-import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
+import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 import net.minecraft.world.level.levelgen.feature.CoralTreeFeature;
 import net.minecraft.world.level.levelgen.feature.FallenTreeFeature;
+import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.TreeFeature;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -232,6 +234,9 @@ public final class PaperweightAdapter implements BukkitImplAdapter<Tag> {
         if (dataVersion <= Constants.DATA_VERSION_MC_26_2) {
             // FAWE-Folia: this adapter is for 26.3 and newer; older servers have their own adapter.
             throw new UnsupportedClassVersionError("Not 26.3+! Use the 26.2 (or older) adapter instead.");
+        }
+        if (dataVersion != Constants.DATA_VERSION_MC_26_3) {
+            logger.warning(WRONG_VERSION);
         }
 
         serverWorldsField = CraftServer.class.getDeclaredField("worlds");
@@ -656,7 +661,7 @@ public final class PaperweightAdapter implements BukkitImplAdapter<Tag> {
             ).getOrThrow();
             stack.applyComponents(componentPatch);
         }
-        return CraftItemStack.asCraftMirror(stack);
+        return CraftItemStack.asBukkitMirror(stack);
     }
 
     @Override
@@ -921,7 +926,7 @@ public final class PaperweightAdapter implements BukkitImplAdapter<Tag> {
         }
 
         // Features
-        for (Identifier name: server.registryAccess().lookupOrThrow(Registries.CONFIGURED_FEATURE).keySet()) {
+        for (Identifier name: server.registryAccess().lookupOrThrow(Registries.FEATURE).keySet()) {
             if (ConfiguredFeatureType.REGISTRY.get(name.toString()) == null) {
                 ConfiguredFeatureType.REGISTRY.register(name.toString(), new ConfiguredFeatureType(name.toString()));
             }
@@ -938,7 +943,7 @@ public final class PaperweightAdapter implements BukkitImplAdapter<Tag> {
         Registry<PlacedFeature> placedFeatureRegistry = server.registryAccess().lookupOrThrow(Registries.PLACED_FEATURE);
         for (Identifier name : placedFeatureRegistry.keySet()) {
             // Do some hackery to make sure this is a tree
-            var underlyingFeature = placedFeatureRegistry.get(name).get().value().feature().value().feature();
+            var underlyingFeature = placedFeatureRegistry.get(name).get().value().feature().value();
             if (underlyingFeature instanceof TreeFeature || underlyingFeature instanceof FallenTreeFeature || underlyingFeature instanceof CoralTreeFeature) {
                 String key = name.toString();
                 if (TreeType.REGISTRY.get(key) == null) {
@@ -979,7 +984,7 @@ public final class PaperweightAdapter implements BukkitImplAdapter<Tag> {
     @Override
     public boolean generateFeature(ConfiguredFeatureType type, World world, EditSession session, BlockVector3 pt) {
         ServerLevel originalWorld = ((CraftWorld) world).getHandle();
-        ConfiguredFeature<?, ?> feature = originalWorld.registryAccess().lookupOrThrow(Registries.CONFIGURED_FEATURE).getValue(Identifier.tryParse(type.id()));
+        Feature feature = originalWorld.registryAccess().lookupOrThrow(Registries.FEATURE).getValue(Identifier.tryParse(type.id()));
         ServerChunkCache chunkManager = originalWorld.getChunkSource();
         try (PaperweightServerLevelDelegateProxy.LevelAndProxy proxyLevel =
                      PaperweightServerLevelDelegateProxy.newInstance(session, originalWorld, this)) {
@@ -1002,10 +1007,12 @@ public final class PaperweightAdapter implements BukkitImplAdapter<Tag> {
         try (PaperweightServerLevelDelegateProxy.LevelAndProxy proxyLevel =
                      PaperweightServerLevelDelegateProxy.newInstance(session, originalWorld, this)) {
             ChunkPos chunkPos = ChunkPos.containing(new BlockPos(pt.x(), pt.y(), pt.z()));
+            RandomState randomState = chunkManager.randomState();
             StructureStart structureStart = structure.generate(
                     structureRegistry.wrapAsHolder(structure), originalWorld.dimension(), originalWorld.registryAccess(),
-                    chunkManager.getGenerator(), chunkManager.getGenerator().getBiomeSource(), chunkManager.randomState(),
-                    originalWorld.getStructureManager(), originalWorld.getSeed(), chunkPos, 0,
+                    chunkManager.getGenerator(), chunkManager.getGenerator().getBiomeSource(),
+                    randomState.createClimateSampler(SamplerContext.builder().enableCaches().build()), randomState,
+                    originalWorld.getStructureTemplateManager(), originalWorld.getSeed(), chunkPos, 0,
                     proxyLevel.level(), biome -> true
             );
 

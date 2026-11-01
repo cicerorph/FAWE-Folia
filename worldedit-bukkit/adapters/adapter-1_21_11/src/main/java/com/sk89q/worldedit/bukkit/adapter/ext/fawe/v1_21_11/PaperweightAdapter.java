@@ -236,6 +236,10 @@ public final class PaperweightAdapter implements BukkitImplAdapter<Tag> {
         if (dataVersion < Constants.DATA_VERSION_MC_1_21_11) {
             throw new UnsupportedClassVersionError("Not 1.21.11 or higher!");
         }
+        if (dataVersion >= Constants.DATA_VERSION_MC_26_1) {
+            // FAWE-Folia: the 26.x adapters exist; never let this one claim a newer server.
+            throw new UnsupportedClassVersionError("Not 1.21.11! Use the 26.x adapter instead.");
+        }
         if (dataVersion != Constants.DATA_VERSION_MC_1_21_11) {
             logger.warning(WRONG_VERSION);
         }

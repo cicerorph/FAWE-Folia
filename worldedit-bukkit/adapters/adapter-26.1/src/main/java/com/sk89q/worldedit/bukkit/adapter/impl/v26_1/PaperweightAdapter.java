@@ -228,6 +228,10 @@ public final class PaperweightAdapter implements BukkitImplAdapter<Tag> {
         var unused = CraftServer.class.cast(Bukkit.getServer());
 
         int dataVersion = SharedConstants.getCurrentVersion().dataVersion().version();
+        if (dataVersion >= Constants.DATA_VERSION_MC_26_2) {
+            // FAWE-Folia: a newer adapter exists; never let this one claim a newer server.
+            throw new UnsupportedClassVersionError("Not 26.1.x! Use the 26.2+ adapter instead.");
+        }
         if (dataVersion != Constants.DATA_VERSION_MC_26_1 && dataVersion != Constants.DATA_VERSION_MC_26_1_1 && dataVersion != Constants.DATA_VERSION_MC_26_1_2) {
             logger.warning(WRONG_VERSION);
         }

@@ -63,7 +63,16 @@ public class PaperweightFaweWorldNativeAccess implements WorldNativeAccess<Level
         this.level = level;
         // Use the actual tick as minecraft-defined so we don't try to force blocks into the world when the server's already lagging.
         //  - With the caveat that we don't want to have too many cached changed (1024) so we'd flush those at 1024 anyway.
-        this.lastTick = new AtomicInteger(Bukkit.getCurrentTick());
+        this.lastTick = new AtomicInteger(currentTickOrUnknown());
+    }
+
+    // Folia throws when no region is ticking, which happens when worlds are created during plugin enable.
+    private static int currentTickOrUnknown() {
+        try {
+            return Bukkit.getCurrentTick();
+        } catch (IllegalStateException e) {
+            return -1;
+        }
     }
 
     private Level getLevel() {
@@ -99,7 +108,7 @@ public class PaperweightFaweWorldNativeAccess implements WorldNativeAccess<Level
             LevelChunk levelChunk, BlockPos blockPos,
             net.minecraft.world.level.block.state.BlockState blockState
     ) {
-        int currentTick = Bukkit.getCurrentTick();
+        int currentTick = currentTickOrUnknown();
         if (Fawe.isMainThread()) {
             return levelChunk.setBlockState(blockPos, blockState,
                     this.sideEffectSet.shouldApply(SideEffect.UPDATE) ? 0 : 512
@@ -108,7 +117,7 @@ public class PaperweightFaweWorldNativeAccess implements WorldNativeAccess<Level
         // Since FAWE is.. Async we need to do it on the main thread (wooooo.. :( )
         cachedChanges.add(new CachedChange(levelChunk, blockPos, blockState));
         cachedChunksToSend.add(new IntPair(levelChunk.locX, levelChunk.locZ));
-        boolean nextTick = lastTick.get() > currentTick;
+        boolean nextTick = currentTick >= 0 && lastTick.get() > currentTick;
         if (nextTick || cachedChanges.size() >= 1024) {
             if (nextTick) {
                 lastTick.set(currentTick);
